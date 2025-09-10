@@ -22,10 +22,7 @@ class CopyIssueCommand extends Command
 {
     public function __construct(
         private GithubService $githubService,
-        private TranslationService $translationService,
-        private string $defaultOwner,
-        private string $defaultRepo,
-        private string $defaultLang
+        private TranslationService $translationService
     ) {
         parent::__construct();
     }
@@ -34,23 +31,24 @@ class CopyIssueCommand extends Command
     {
         $this
             ->addArgument('issue-number', InputArgument::REQUIRED, 'Source issue number')
-            ->addOption('to-owner', null, InputOption::VALUE_OPTIONAL, 'Target repo owner', $this->defaultOwner)
-            ->addOption('to-repo', null, InputOption::VALUE_OPTIONAL, 'Target repo name', $this->defaultRepo)
-            ->addOption('lang', null, InputOption::VALUE_OPTIONAL, 'Target language', $this->defaultLang)
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dry run mode');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $issueNumber = $input->getArgument('issue-number');
-        $targetOwner = $input->getOption('to-owner');
-        $targetRepo = $input->getOption('to-repo');
-        $translateTo = $input->getOption('lang');
         $dryRun = $input->getOption('dry-run');
 
-        // Source repo defaults from env
-        $sourceOwner = $this->defaultOwner;
-        $sourceRepo = $this->defaultRepo;
+        $targetOwner = $_ENV['GITHUB_TARGET_OWNER'] ?? null;
+        $targetRepo = $_ENV['GITHUB_TARGET_REPO'] ?? null;
+        $translateTo = $_ENV['GITHUB_DEFAULT_LANG'] ?? null;
+        $sourceOwner = $_ENV['GITHUB_DEFAULT_OWNER'] ?? null;
+        $sourceRepo = $_ENV['GITHUB_DEFAULT_REPO'] ?? null;
+
+        if (!$targetOwner || !$targetRepo || !$sourceOwner || !$sourceRepo || !$translateTo) {
+            $output->writeln('<error>Missing required environment variables: GITHUB_TARGET_OWNER, GITHUB_TARGET_REPO, GITHUB_DEFAULT_OWNER, GITHUB_DEFAULT_REPO, GITHUB_DEFAULT_LANG. Check your .env.etennis file.</error>');
+            return Command::FAILURE;
+        }
 
         // Fetch issue
         $issue = $this->githubService->getIssue($sourceOwner, $sourceRepo, $issueNumber);

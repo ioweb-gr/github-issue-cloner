@@ -21,10 +21,7 @@ class CopyCommentCommand extends Command
 {
     public function __construct(
         private GithubService $githubService,
-        private TranslationService $translationService,
-        private string $defaultOwner,
-        private string $defaultRepo,
-        private string $defaultLang
+        private TranslationService $translationService
     ) {
         parent::__construct();
     }
@@ -33,22 +30,24 @@ class CopyCommentCommand extends Command
     {
         $this
             ->addOption('comment-link', null, InputOption::VALUE_REQUIRED, 'GitHub comment link')
-            ->addOption('to-owner', null, InputOption::VALUE_OPTIONAL, 'Target repo owner', $this->defaultOwner)
-            ->addOption('to-repo', null, InputOption::VALUE_OPTIONAL, 'Target repo name', $this->defaultRepo)
-            ->addOption('lang', null, InputOption::VALUE_OPTIONAL, 'Target language', $this->defaultLang)
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dry run mode');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $commentLink = $input->getOption('comment-link');
-        $targetOwner = $input->getOption('to-owner');
-        $targetRepo = $input->getOption('to-repo');
-        $translateTo = $input->getOption('lang');
         $dryRun = $input->getOption('dry-run');
+
+        $targetOwner = $_ENV['GITHUB_TARGET_OWNER'] ?? null;
+        $targetRepo = $_ENV['GITHUB_TARGET_REPO'] ?? null;
+        $translateTo = $_ENV['GITHUB_DEFAULT_LANG'] ?? null;
 
         if (!$commentLink) {
             $output->writeln('<error>--comment-link is required.</error>');
+            return Command::FAILURE;
+        }
+        if (!$targetOwner || !$targetRepo || !$translateTo) {
+            $output->writeln('<error>Missing required environment variables: GITHUB_TARGET_OWNER, GITHUB_TARGET_REPO, GITHUB_DEFAULT_LANG. Check your .env.etennis file.</error>');
             return Command::FAILURE;
         }
 
@@ -93,4 +92,3 @@ class CopyCommentCommand extends Command
         return Command::SUCCESS;
     }
 }
-

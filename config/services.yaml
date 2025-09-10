@@ -15,16 +15,6 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
-    App\Command\CopyCommentCommand:
-        arguments:
-            $defaultOwner: '%env(GITHUB_TARGET_OWNER)%'
-            $defaultRepo: '%env(GITHUB_TARGET_REPO)%'
-            $defaultLang: '%env(GITHUB_DEFAULT_LANG)%'
-    App\Command\CopyIssueCommand:
-        arguments:
-            $defaultOwner: '%env(GITHUB_DEFAULT_OWNER)%'
-            $defaultRepo: '%env(GITHUB_DEFAULT_REPO)%'
-            $defaultLang: '%env(GITHUB_DEFAULT_LANG)%'
     App\Service\GithubService:
         arguments:
             $githubToken: '%env(GITHUB_TOKEN)%'
