@@ -52,45 +52,85 @@ class CopyCommentCommand extends Command
         }
 
         // Parse owner/repo/commentId from link
-        if (!preg_match('#github\.com/([^/]+)/([^/]+)/issues/#', $commentLink, $mRepo)) {
-            $output->writeln('<error>Cannot parse owner/repo from --comment-link</error>');
-            return Command::FAILURE;
-        }
-        $sourceOwner = $mRepo[1];
-        $sourceRepo = $mRepo[2];
-        $commentId = null;
-        if (preg_match('#issuecomment-(\d+)#', $commentLink, $m)) $commentId = $m[1];
-        if (!$commentId && preg_match('#/issues/comments/(\d+)#', $commentLink, $m)) $commentId = $m[1];
-        if (!$commentId) {
-            $output->writeln('<error>Cannot extract comment ID from link.</error>');
+        $parsed = $this->parseCommentLink($commentLink);
+        if (!$parsed) {
+            $output->writeln('<error>Cannot parse owner/repo/commentId from --comment-link</error>');
             return Command::FAILURE;
         }
 
-        // Fetch comment
-        $comment = $this->githubService->getIssueComment($sourceOwner, $sourceRepo, $commentId);
-        $issueUrl = $comment['issue_url'] ?? null;
-        $sourceIssue = $issueUrl ? $this->githubService->getIssue($sourceOwner, $sourceRepo, basename($issueUrl)) : null;
-        $sourceIssueNum = $sourceIssue['number'] ?? null;
-        $originalAuthor = $comment['user']['login'] ?? 'unknown';
-        $originalUrl = $comment['html_url'] ?? $commentLink;
-        $commentBody = $comment['body'] ?? '';
-        $translated = $translateTo ? $this->translationService->translate($commentBody, $translateTo) : $commentBody;
-        $header = "**Original comment by @$originalAuthor**  \n[View source]($originalUrl)";
-        if ($sourceIssueNum) $header .= "  \nFrom: `$sourceOwner/$sourceRepo#$sourceIssueNum`";
-        $newIssueBody = $header . "\n\n" . $translated;
+        [$sourceOwner, $sourceRepo, $commentId] = [$parsed['owner'], $parsed['repo'], $parsed['commentId']];
 
-        $translatedTitle = $sourceIssue && $sourceIssue['title'] ? $this->translationService->translate($sourceIssue['title'], $translateTo) : null;
-        $newIssueTitle = "[Comment Copy] " . ($translatedTitle ?? 'Copied comment');
-        $payload = ['title' => $newIssueTitle, 'body' => $newIssueBody];
+        // Fetch comment and source issue
+        $fetched = $this->fetchCommentAndIssue($sourceOwner, $sourceRepo, $commentId);
+        if (!$fetched['comment']) {
+            $output->writeln('<error>Failed to fetch comment from GitHub.</error>');
+            return Command::FAILURE;
+        }
+
+        $payload = $this->buildPayload($fetched['comment'], $fetched['issue'], $sourceOwner, $sourceRepo, $translateTo, $commentLink);
 
         if ($dryRun) {
             $output->writeln("[DRY RUN] Would create issue in $targetOwner/$targetRepo");
-            $output->writeln("Title: $newIssueTitle\n\n$newIssueBody");
+            $output->writeln("Title: {$payload['title']}\n\n{$payload['body']}");
             return Command::SUCCESS;
         }
 
         $created = $this->githubService->createIssue($targetOwner, $targetRepo, $payload);
         $output->writeln("✅ Created new issue: " . $created['html_url']);
         return Command::SUCCESS;
+    }
+
+    private function parseCommentLink(string $link): ?array
+    {
+        if (!preg_match('#github\.com/([^/]+)/([^/]+)/issues/#', $link, $mRepo)) {
+            return null;
+        }
+        $owner = $mRepo[1];
+        $repo = $mRepo[2];
+        $commentId = null;
+        if (preg_match('#issuecomment-(\d+)#', $link, $m)) {
+            $commentId = $m[1];
+        }
+        if (!$commentId && preg_match('#/issues/comments/(\d+)#', $link, $m)) {
+            $commentId = $m[1];
+        }
+        if (!$commentId) {
+            return null;
+        }
+
+        return ['owner' => $owner, 'repo' => $repo, 'commentId' => $commentId];
+    }
+
+    private function fetchCommentAndIssue(string $owner, string $repo, string $commentId): array
+    {
+        $comment = $this->githubService->getIssueComment($owner, $repo, $commentId);
+        $issue = null;
+        $issueUrl = $comment['issue_url'] ?? null;
+        if ($issueUrl) {
+            $issueNumber = basename($issueUrl);
+            $issue = $this->githubService->getIssue($owner, $repo, $issueNumber);
+        }
+
+        return ['comment' => $comment, 'issue' => $issue];
+    }
+
+    private function buildPayload(array $comment, ?array $sourceIssue, string $sourceOwner, string $sourceRepo, ?string $translateTo, string $originalLink): array
+    {
+        $sourceIssueNum = $sourceIssue['number'] ?? null;
+        $originalAuthor = $comment['user']['login'] ?? 'unknown';
+        $originalUrl = $comment['html_url'] ?? $originalLink;
+        $commentBody = $comment['body'] ?? '';
+        $translated = $translateTo ? $this->translationService->translate($commentBody, $translateTo) : $commentBody;
+
+        $header = "**Original comment by @$originalAuthor**  \n[View source]($originalUrl)";
+        if ($sourceIssueNum) {
+            $header .= "  \nFrom: `$sourceOwner/$sourceRepo#$sourceIssueNum`";
+        }
+        $newIssueBody = $header . "\n\n" . $translated;
+
+        $translatedTitle = $sourceIssue && !empty($sourceIssue['title']) ? $this->translationService->translate($sourceIssue['title'], $translateTo) : null;
+        $newIssueTitle = "[Comment Copy] " . ($translatedTitle ?? 'Copied comment');
+
+        return ['title' => $newIssueTitle, 'body' => $newIssueBody];
     }
 }
