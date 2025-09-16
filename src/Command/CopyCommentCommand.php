@@ -78,7 +78,9 @@ class CopyCommentCommand extends Command
         $header = "**Original comment by @$originalAuthor**  \n[View source]($originalUrl)";
         if ($sourceIssueNum) $header .= "  \nFrom: `$sourceOwner/$sourceRepo#$sourceIssueNum`";
         $newIssueBody = $header . "\n\n" . $translated;
-        $newIssueTitle = "[Comment Copy] " . ($sourceIssue['title'] ?? 'Copied comment');
+
+        $translatedTitle = $sourceIssue && $sourceIssue['title'] ? $this->translationService->translate($sourceIssue['title'], $translateTo) : null;
+        $newIssueTitle = "[Comment Copy] " . ($translatedTitle ?? 'Copied comment');
         $payload = ['title' => $newIssueTitle, 'body' => $newIssueBody];
 
         if ($dryRun) {
