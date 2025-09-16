@@ -25,7 +25,7 @@ class TranslationService
         $payload = [
             'contents' => [[
                 'parts' => [[
-                    'text' => "Translate to {$targetLanguage} preserving links/images; keep meaning:\n\n" . $text
+                    'text' => "Translate to {$targetLanguage} preserving links/images; keep meaning:\n\n" . $text . " .Make sure to only provide the translated text nothing extra or additional."
                 ]]
             ]]
         ];
